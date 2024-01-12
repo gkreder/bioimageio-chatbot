@@ -62,13 +62,13 @@ def execute_code(script, context=None):
         return {
             "stdout": stdout_output,
             "stderr": stderr_output,
-            # "context": local_vars  # Include context variables in the result
+            "context": local_vars  # Include context variables in the result
         }
     except Exception as e:
         return {
             "stdout": "",
             "stderr": str(e),
-            # "context": context  # Include context variables in the result even if an error occurs
+            "context": context  # Include context variables in the result even if an error occurs
         }
     finally:
         # Restore the original stdout and stderr
