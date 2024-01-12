@@ -1,0 +1,179 @@
+<docs>
+  [TODO: write documentation for this plugin.]
+  </docs>
+  
+  <config lang="json">
+  {
+    "name": "chatbot-bioengine-client",
+    "type": "web-worker",
+    "tags": [],
+    "ui": "",
+    "version": "0.1.0",
+    "cover": "",
+    "description": "Register bioengine web client to chatbot",
+    "icon": "extension",
+    "inputs": null,
+    "outputs": null,
+    "api_version": "0.1.8",
+    "env": "",
+    "permissions": [],
+    "requirements": [],
+    "dependencies": []
+  }
+  </config>
+  
+  <script lang="javascript">
+  class ImJoyPlugin {
+    async setup() {
+      this.chatbot = await api.getWindow("BioImage.IO Chatbot")
+      if (this.chatbot) {
+        await this.registerExtensions()
+      }
+    }
+  
+    async registerExtensions() {
+      const chatbot = this.chatbot
+      await chatbot.registerExtension({
+        _rintf: true,
+        name: "runImageJMacro",
+        description: "Run a macro in ImageJ.JS",
+        async get_schema() {
+          return {
+            type: "object",
+            title: "RunImageJMacro",
+            description: "Run a macro in ImageJ.JS",
+            properties: {
+              macro: {
+                type: "string",
+                description: "The macro to run",
+              },
+              args: {
+                type: "object",
+                description: "Arguments for the macro",
+              },
+            },
+          };
+        },
+        async execute(config) {
+          let ij = await api.getWindow("ImageJ.JS");
+          if (!ij) {
+            ij = await api.createWindow({
+              src: "https://ij.imjoy.io",
+              name: "ImageJ.JS",
+            });
+          }
+          try {
+            const result = await ij.runMacro(config["macro"], config["args"]);
+            return result;
+          } catch (e) {
+            console.error(e);
+            return e.toString();
+          }
+        },
+      });
+  
+      await chatbot.registerExtension({
+        _rintf: true,
+        name: "runBioengineClient",
+        description: "Run bioengine web client",
+        async get_schema() {
+          return {
+            type: "object",
+            title: "RunBioengineClient",
+            description: "Run bioengine web client",
+            properties: {
+              model_name: {
+                type: "string",
+                description: "The model name to run",
+              },
+              parameters: {
+                type: "string",
+                description: `Parameters for the model, structured as a JSON object. For example, use {"model_type": "cyto", "diameter": 30} for a cyto model with a diameter parameter. The keys should be string identifiers of the parameters, and the values should be their corresponding settings. The structure and content of this object can vary depending on the specific model being used. Make sure to adhere to the expected data types and value ranges for each parameter. It's not include the tiling related parameters, please use tiling_sizes and tiling_overlaps instead.`
+              },
+              tiling_sizes: {
+                type: "string",
+                description: `The sizes of the tile for run the model in each dimension, structured as a JSON object. For example use {x: 64, y: 64} for 64x64 pixel tiles in 2D models. If your model is 3D, you can include 'z' like {x: 64, y: 64, z: 64}.`
+              },
+              tiling_overlaps: {
+                type: "string",
+                description: `The overlap of the tile for run the model in each dimension, structured as a JSON object. For example use {x: 32, y: 32} for 32x32 pixel overlaps in 2D models. If your model is 3D, you can include 'z' like {x: 32, y: 32, z: 32}.`
+              },
+            },
+          };
+        },
+        async execute(config) {
+          let client = await api.getWindow("bioengine-web-client");
+          if (!client) {
+            client = await api.createWindow({
+              src: "https://bioimage-io.github.io/bioengine-web-client/",
+              name: "bioengine-web-client",
+            });
+            await client.waitForReady();
+          }
+          await client.setModel(config["model_name"]);
+          const params = config?.parameters;
+          if (params) {
+            const paramsObj = JSON.parse(params)
+            await client.setParameters(paramsObj);
+          }
+          const tilingSizes = config?.tiling_sizes
+          const tilingOverlaps = config?.tiling_overlaps
+          if (tilingSizes || tilingOverlaps) {
+            const tilingSettingsObj = {}
+            if (tilingSizes) {
+              tilingSettingsObj["tilingSizes"] = JSON.parse(tilingSizes)
+            }
+            if (tilingOverlaps) {
+              tilingSettingsObj["tilingOverlaps"] = JSON.parse(tilingOverlaps)
+            }
+            await client.setTiling(tilingSettingsObj)
+          }
+          await client.runModel();
+          return "Done"
+        },
+      })
+  
+      await chatbot.registerExtension({
+        _rintf: true,
+        name: "listBioengineModels",
+        description: "List all bioengine models",
+        async get_schema() {
+          return {
+            type: "object",
+            title: "ListBioengineModels",
+            description: "This function retrieves a list of all available bioengine models along with their descriptions. The output is formatted as a Markdown table, providing a clear and structured view of each model and its relevant details. The table will include columns for model identifiers, names, descriptions, and any other pertinent attributes.",
+            properties: {},
+          };
+        },
+        async execute(config) {
+          let client = await api.getWindow("bioengine-web-client");
+          if (!client) {
+            client = await api.createWindow({
+              src: "https://bioimage-io.github.io/bioengine-web-client/",
+              name: "bioengine-web-client",
+            });
+            await client.waitForReady();
+          }
+          const models = await client.listModels();
+          return models;
+        },
+      })
+  
+      api.log('initialized')
+    }
+  
+    async run(ctx) {
+      let chatbot = await api.getWindow("BioImage.IO Chatbot");
+      if (!chatbot) {
+        chatbot = await api.createWindow({
+          src: "https://staging.chat.bioimage.io/public/apps/bioimageio-chatbot-client/index",
+          name: "BioImage.IO Chatbot",
+        });
+      }
+      this.chatbot = chatbot
+      await this.registerExtensions()
+    }
+  }
+  
+  api.export(new ImJoyPlugin())
+  </script>
